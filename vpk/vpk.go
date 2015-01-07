@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"hash"
+	"hash/crc32"
 	"io"
 	"os"
 )
@@ -24,7 +26,11 @@ type vpkHeader struct {
 }
 
 type FileHeader struct {
-	CRC          uint32
+	CRC   uint32
+	entry *fileEntry
+}
+
+type fileEntry struct {
 	PreloadBytes uint16
 	ArchiveIndex uint16
 	EntryOffset  uint32
@@ -33,7 +39,8 @@ type FileHeader struct {
 
 type File struct {
 	FileHeader
-	Name string
+	Name   string
+	parent *ReadCloser
 }
 
 type Reader struct {
@@ -41,12 +48,17 @@ type Reader struct {
 }
 
 type ReadCloser struct {
-	f *os.File
 	Reader
+	head *vpkHeader
+	fd   *os.File
+	fs   map[int]*os.File
 }
 
 func (r *ReadCloser) Close() {
-	r.f.Close()
+	r.fd.Close()
+	for _, f := range r.fs {
+		f.Close()
+	}
 }
 
 //OpenReader is open vpk file function
@@ -70,18 +82,40 @@ func OpenReader(path string, more ...string) (*ReadCloser, error) {
 		f.Close()
 		return nil, err
 	}
-	r.f = f
+	r.fd = f
 	return r, nil
 }
 
-func (z *Reader) init(r io.Reader, size int64) error {
-	_, err := readHeader(r, size)
+func (f *File) Open() (io.ReadCloser, error) {
+	rc := new(fileReader)
+	p := f.parent
+	if f.entry.ArchiveIndex == 0x7fff {
+		rc.f = p.fd
+		rc.offset = int64(f.entry.EntryOffset + p.head.TreeLength)
+	} else {
+		rc.f = p.fs[int(f.entry.ArchiveIndex)]
+		if rc.f != nil {
+			return nil, fmt.Errorf("Not found archive file.")
+		}
+		rc.offset = int64(f.entry.EntryOffset)
+	}
+	rc.length = int64(f.entry.EntryLength)
+	rc.hash = crc32.NewIEEE()
+	return rc, nil
+}
+
+func (z *ReadCloser) init(r io.Reader, size int64) error {
+	head, err := readHeader(r, size)
 	if err != nil {
 		return err
 	}
+	z.head = head
 	files, err := readDirectory(r, size)
 	if err != nil {
 		return err
+	}
+	for _, file := range files {
+		file.parent = z
 	}
 	z.File = files
 	return nil
@@ -157,12 +191,51 @@ func readDirectory(r io.Reader, size int64) ([]*File, error) {
 }
 
 func readFileInfo(r io.Reader, size int64) (*FileHeader, error) {
-	entry := new(FileHeader)
+	header := new(FileHeader)
+	binary.Read(r, order, &header.CRC)
+	entry := new(fileEntry)
 	binary.Read(r, order, entry)
+	header.entry = entry
 	var terminator uint16
 	binary.Read(r, order, &terminator)
 	if terminator != 0xffff {
 		return nil, broken
 	}
-	return entry, nil
+	return header, nil
+}
+
+type fileReader struct {
+	io.ReadCloser
+	hash   hash.Hash32
+	f      *os.File
+	offset int64
+	length int64
+	closed bool
+}
+
+func (r *fileReader) Read(b []byte) (int, error) {
+	if r.closed {
+		return 0, fmt.Errorf("Closed.")
+	}
+	if r.length == 0 {
+		return 0, io.EOF
+	}
+	_, err := r.f.Seek(r.offset, 0)
+	if err != nil {
+		return 0, err
+	}
+	size := len(b)
+	l := int(r.length)
+	if size > l {
+		size = l
+	}
+	s, err := r.f.Read(b[:size])
+	r.offset += int64(s)
+	r.length -= int64(s)
+	return s, err
+}
+
+func (r *fileReader) Close() error {
+	r.closed = true
+	return nil
 }
