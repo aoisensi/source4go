@@ -12,6 +12,9 @@ import (
 
 const (
 	signature = 0x55aa1234
+
+	hSizeV1 = 0x0d
+	hSizeV2 = 0x1b
 )
 
 var (
@@ -99,6 +102,13 @@ func (f *File) Open() (io.ReadCloser, error) {
 		}
 		rc.offset = int64(f.entry.EntryOffset)
 	}
+	switch f.parent.head.Version {
+	case 1:
+		rc.offset += hSizeV1
+	case 2:
+		rc.offset += hSizeV2
+	}
+	rc.offset++
 	rc.length = int64(f.entry.EntryLength)
 	rc.hash = crc32.NewIEEE()
 	return rc, nil

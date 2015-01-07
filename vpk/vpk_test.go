@@ -1,6 +1,10 @@
 package vpk
 
-import "testing"
+import (
+	"bytes"
+	"io"
+	"testing"
+)
 
 func TestFileCheck(t *testing.T) {
 	r, err := OpenReader("test.vpk")
@@ -11,8 +15,24 @@ func TestFileCheck(t *testing.T) {
 	if len(r.File) != 1 {
 		panic(err)
 	}
-	name := r.File[0].Name
+	file := r.File[0]
+	name := file.Name
 	if name != "the/cake/is/a/lie/glados.txt" {
 		t.Error(name)
+	}
+	rc, err := file.Open()
+	if err != nil {
+		panic(err)
+	}
+	defer rc.Close()
+	buf := make([]byte, 0x20)
+	_, err = rc.Read(buf)
+	if err != io.EOF && err != nil {
+		t.Error(err)
+	}
+	text := []byte("the cake is a lie...")
+
+	if !bytes.Equal(buf[:len(text)], text) {
+		t.Error("Failed to read file")
 	}
 }
