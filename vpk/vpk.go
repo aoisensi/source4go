@@ -8,6 +8,7 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
+	"strings"
 )
 
 const (
@@ -15,6 +16,8 @@ const (
 
 	hSizeV1 = 0x0d
 	hSizeV2 = 0x1b
+
+	dirName = "_dir.vpk"
 )
 
 var (
@@ -68,10 +71,8 @@ func (r *ReadCloser) Close() {
 //if u want extract...
 //	Solo file: ("path/to/file.vpk")
 //	Sequence files: ("path/to/file_dir.vpk")
-//	Sequence files: ("path/to/file_dir.vpk", "path/to/file_001.vpk")
 //	Directory: ("path/to/")
-func OpenReader(path string, more ...string) (*ReadCloser, error) {
-	r := new(ReadCloser)
+func OpenReader(path string) (*ReadCloser, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -80,12 +81,25 @@ func OpenReader(path string, more ...string) (*ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	r := new(ReadCloser)
 	if err := r.init(f, fi.Size()); err != nil {
 		f.Close()
 		return nil, err
 	}
 	r.fd = f
+
+	if strings.HasSuffix(f.Name(), dirName) {
+		r.fs = make(map[int]*os.File)
+		for i := 1; i < 1000; i++ {
+			spath := fmt.Sprintf("%s%03d.vpk", path[:len(path)-7], i)
+			sf, err := os.Open(spath)
+			if err != nil {
+				break
+			}
+			r.fs[i] = sf
+		}
+	}
+
 	return r, nil
 }
 
@@ -247,5 +261,14 @@ func (r *fileReader) Read(b []byte) (int, error) {
 
 func (r *fileReader) Close() error {
 	r.closed = true
+	return nil
+}
+
+func (r *Reader) FindFile(name string) *File {
+	for _, file := range r.File {
+		if name == file.Name {
+			return file
+		}
+	}
 	return nil
 }
