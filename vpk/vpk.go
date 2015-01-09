@@ -21,8 +21,9 @@ const (
 )
 
 var (
-	order  = binary.LittleEndian
-	broken = errors.New("This vpk file(s) is broken.")
+	order       = binary.LittleEndian
+	ErrBroken   = errors.New("This vpk file(s) is ErrBroke.")
+	ErrChecksum = errors.New("VPK checksum error.")
 )
 
 type vpkHeader struct {
@@ -125,6 +126,7 @@ func (f *File) Open() (io.ReadCloser, error) {
 	rc.offset++
 	rc.length = int64(f.entry.EntryLength)
 	rc.hash = crc32.NewIEEE()
+	rc.crc32 = f.CRC
 	return rc, nil
 }
 
@@ -223,7 +225,7 @@ func readFileInfo(r io.Reader, size int64) (*FileHeader, error) {
 	var terminator uint16
 	binary.Read(r, order, &terminator)
 	if terminator != 0xffff {
-		return nil, broken
+		return nil, ErrBroken
 	}
 	return header, nil
 }
@@ -235,6 +237,7 @@ type fileReader struct {
 	offset int64
 	length int64
 	closed bool
+	crc32  uint32
 }
 
 func (r *fileReader) Read(b []byte) (int, error) {
@@ -254,8 +257,14 @@ func (r *fileReader) Read(b []byte) (int, error) {
 		size = l
 	}
 	s, err := r.f.Read(b[:size])
+	r.hash.Write(b[:size])
 	r.offset += int64(s)
 	r.length -= int64(s)
+	if err == io.EOF {
+		if r.hash.Sum32() != r.crc32 {
+			err = ErrChecksum
+		}
+	}
 	return s, err
 }
 

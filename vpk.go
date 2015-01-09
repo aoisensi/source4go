@@ -51,7 +51,7 @@ func main() {
 		for _, file := range files {
 			fp, _ := filepath.Split(file.Name)
 			os.MkdirAll(fp, 0755)
-			f, err := os.OpenFile(file.Name, os.O_CREATE|os.O_WRONLY, 0311)
+			f, err := os.OpenFile(file.Name, os.O_CREATE|os.O_WRONLY, 0666)
 			if err != nil {
 				fmt.Println(err)
 				continue
