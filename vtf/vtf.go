@@ -1,5 +1,19 @@
 package vtf
 
+import (
+	"encoding/binary"
+	"errors"
+)
+
+var (
+	headerSignature uint32 = 0x00465456
+	order                  = binary.LittleEndian
+)
+
+var (
+	ErrNotVtfFile = errors.New("the file is not vtf file.")
+)
+
 const (
 	ImageFormatNone     = -1
 	ImageFormatRGBA8888 = iota
