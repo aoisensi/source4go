@@ -87,22 +87,22 @@ const (
 )
 
 type vtfHeader struct {
-	signature          uint32 //little-endian integer, 0x00465456little-endian integer, 0x00465456
-	version            [2]uint32
-	headerSize         uint32
-	width              uint16
-	height             uint16
-	flags              uint32
-	frames             uint16
-	firstFrame         uint16
-	padding0           [4]byte
-	reflectivity       [3]float32
-	padding1           [4]byte
-	bumpmapScale       float32
-	highResImageFormat uint32
-	mipmapCount        byte
-	lowResImageFormat  uint32
-	lowResImageWidth   byte
-	lowResImageHeight  byte
-	depth              uint16
+	Signature          uint32 //little-endian integer, 0x00465456little-endian integer, 0x00465456
+	Version            [2]uint32
+	HeaderSize         uint32
+	Width              uint16
+	Height             uint16
+	Flags              uint32
+	Frames             uint16
+	FirstFrame         uint16
+	Padding0           [4]byte
+	Reflectivity       [3]float32
+	Padding1           [4]byte
+	BumpmapScale       float32
+	HighResImageFormat uint32
+	MipmapCount        byte
+	LowResImageFormat  uint32
+	LowResImageWidth   byte
+	LowResImageHeight  byte
+	Depth              uint16
 }
